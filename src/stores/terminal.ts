@@ -278,11 +278,20 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function getSnapshot(): TerminalState {
+    return {
+      currentDirectory: currentDirectory.value,
+      nodes: structuredClone(nodes.value),
+      history: [...history.value],
+    }
+  }
+
   return {
     currentDirectory,
     nodes,
     history,
     prompt,
     execute,
+    getSnapshot,
   }
 })
