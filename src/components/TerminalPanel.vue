@@ -14,6 +14,8 @@ let fitAddon: FitAddon | null = null
 
 let currentInput = ''
 
+const emit = defineEmits<{ commandExecuted: [] }>()
+
 function runCommand(): void {
   if (!terminal) {
     return
@@ -32,6 +34,8 @@ function runCommand(): void {
   }
 
   currentInput = ''
+
+  emit('commandExecuted')
 
   terminal.write(terminalStore.prompt)
 }

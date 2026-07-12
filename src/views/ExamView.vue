@@ -1,55 +1,42 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useTerminalStore } from '@/stores/terminal'
 import { useExamStore } from '@/stores/exam'
 import TerminalPanel from '@/components/TerminalPanel.vue'
+import { useRouter } from 'vue-router'
+import { useTerminalStore } from '@/stores/terminal'
+import { ref } from 'vue'
+import ExerciseCard from '@/components/ExerciseCard.vue'
 
-const terminalStore = useTerminalStore()
+const router = useRouter()
+
 const examStore = useExamStore()
+const terminalStore = useTerminalStore()
 
-const command = ref('')
-const output = ref<string[]>([])
+const message = ref<string>('')
 
-function submitCommand() {
-  const result = terminalStore.execute(command.value)
-
-  output.value.push(`${terminalStore.prompt}${command.value}`)
-
-  output.value.push(...result.output)
-
+function handleCommandExecute(): void {
   const passed = examStore.evaluateCurrentExercise(terminalStore.getSnapshot())
-
-  if (passed) {
-    output.value.push('Exercise completed.')
+  if (!passed) {
+    return
   }
 
-  command.value = ''
+  message.value = 'Exercise completed'
+
+  if (examStore.isFinished) {
+    router.push({ name: 'results' })
+  }
 }
 </script>
 
 <template>
   <main>
-    <section v-if="examStore.currentExercise">
-      <h2>
-        {{ examStore.currentExercise.title }}
-      </h2>
+    <ExerciseCard
+      v-if="examStore.currentExercise"
+      :exercise="examStore.currentExercise"
+      :current-number="examStore.currentExerciseIndex + 1"
+      :total="examStore.exercises.length"
+      :message="message"
+    />
 
-      <p>
-        {{ examStore.currentExercise.description }}
-      </p>
-
-      <strong> {{ examStore.currentExercise.points }} points </strong>
-    </section>
-
-    <TerminalPanel />
-
-    <div v-for="(line, index) in output" :key="index">
-      {{ line }}
-    </div>
-
-    <form @submit.prevent="submitCommand">
-      <span>{{ terminalStore.prompt }}</span>
-      <input v-model="command" autofocus />
-    </form>
+    <TerminalPanel @command-executed="handleCommandExecute" />
   </main>
 </template>
