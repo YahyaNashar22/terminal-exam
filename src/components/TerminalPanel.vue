@@ -3,11 +3,38 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { useTerminalStore } from '@/stores/terminal'
+
+const terminalStore = useTerminalStore()
 
 const terminalElement = ref<HTMLDivElement | null>(null)
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
+
+let currentInput = ''
+
+function runCommand(): void {
+  if (!terminal) {
+    return
+  }
+
+  terminal.write('\r\n')
+
+  const result = terminalStore.execute(currentInput)
+
+  for (const outputLine of result.output) {
+    terminal.writeln(outputLine)
+  }
+
+  if (result.clear) {
+    terminal.clear()
+  }
+
+  currentInput = ''
+
+  terminal.write(terminalStore.prompt)
+}
 
 onMounted(() => {
   if (!terminalElement.value) {
@@ -28,6 +55,35 @@ onMounted(() => {
   fitAddon.fit()
 
   terminal.writeln('Terminal Exam')
+
+  terminal.write(`\r\n${terminalStore.prompt}`)
+
+  terminal.onData((data) => {
+    if (!terminal) {
+      return
+    }
+
+    if (data === '\r') {
+      runCommand()
+      return
+    }
+
+    if (data === '\u007F') {
+      if (currentInput.length > 0) {
+        currentInput = currentInput.slice(0, -1)
+
+        terminal.write('\b \b')
+      }
+      return
+    }
+
+    if (data < ' ') {
+      return
+    }
+
+    currentInput += data
+    terminal.write(data)
+  })
 })
 
 onBeforeUnmount(() => {
