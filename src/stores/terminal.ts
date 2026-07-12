@@ -4,7 +4,6 @@ import { defineStore } from 'pinia'
 import type { CommandResult, FileSystemNode, TerminalState } from '@/types/terminal'
 
 import { getBaseName, getParentPath, normalizePath } from '@/services/pathUtils'
-import type { L } from 'vue-router/dist/index-BQLwgiyK.js'
 
 function createInitialNodes(): Record<string, FileSystemNode> {
   return {
