@@ -1,6 +1,6 @@
 import type { Exercise } from '@/types/exercise'
 
-export const exercise: Exercise[] = [
+export const exercises: Exercise[] = [
   {
     id: 1,
     title: 'Print the current directory',
