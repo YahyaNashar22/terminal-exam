@@ -13,8 +13,47 @@ let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 
 let currentInput = ''
+let pendingInput = ''
+let historyIndex = -1
 
 const emit = defineEmits<{ commandExecuted: [] }>()
+
+function writePrompt(): void {
+  if (!terminal) {
+    return
+  }
+
+  terminal.write(terminalStore.prompt)
+}
+
+function writeOutput(output: string): void {
+  if (!terminal) {
+    return
+  }
+
+  const normalizedOutput = output.replace(/\r\n/g, '\n')
+  const lines = normalizedOutput.split('\n')
+  const endsWithNewline = normalizedOutput.endsWith('\n')
+  const lineCount = endsWithNewline ? lines.length - 1 : lines.length
+
+  for (let index = 0; index < lineCount; index += 1) {
+    terminal.writeln(lines[index] ?? '')
+  }
+}
+
+function replaceCurrentInput(nextInput: string): void {
+  if (!terminal) {
+    return
+  }
+
+  while (currentInput.length > 0) {
+    terminal.write('\b \b')
+    currentInput = currentInput.slice(0, -1)
+  }
+
+  currentInput = nextInput
+  terminal.write(currentInput)
+}
 
 function runCommand(): void {
   if (!terminal) {
@@ -26,7 +65,7 @@ function runCommand(): void {
   const result = terminalStore.execute(currentInput)
 
   for (const outputLine of result.output) {
-    terminal.writeln(outputLine)
+    writeOutput(outputLine)
   }
 
   if (result.clear) {
@@ -34,10 +73,12 @@ function runCommand(): void {
   }
 
   currentInput = ''
+  pendingInput = ''
+  historyIndex = -1
+
+  writePrompt()
 
   emit('commandExecuted')
-
-  terminal.write(terminalStore.prompt)
 }
 
 onMounted(() => {
@@ -58,9 +99,7 @@ onMounted(() => {
 
   fitAddon.fit()
 
-  terminal.writeln('Terminal Exam')
-
-  terminal.write(`\r\n${terminalStore.prompt}`)
+  writePrompt()
 
   terminal.onData((data) => {
     if (!terminal) {
@@ -81,8 +120,47 @@ onMounted(() => {
       return
     }
 
+    if (data === '\u001b[A') {
+      if (terminalStore.history.length === 0) {
+        return
+      }
+
+      if (historyIndex === -1) {
+        pendingInput = currentInput
+        historyIndex = terminalStore.history.length - 1
+      } else {
+        historyIndex = Math.max(0, historyIndex - 1)
+      }
+
+      replaceCurrentInput(terminalStore.history[historyIndex] ?? '')
+      return
+    }
+
+    if (data === '\u001b[B') {
+      if (historyIndex === -1) {
+        return
+      }
+
+      if (historyIndex >= terminalStore.history.length - 1) {
+        historyIndex = -1
+        replaceCurrentInput(pendingInput)
+        return
+      }
+
+      historyIndex += 1
+
+      replaceCurrentInput(terminalStore.history[historyIndex] ?? '')
+      return
+    }
+
     if (data < ' ') {
       return
+    }
+
+    if (historyIndex !== -1) {
+      historyIndex = -1
+      pendingInput = ''
+      replaceCurrentInput('')
     }
 
     currentInput += data
@@ -98,12 +176,3 @@ onBeforeUnmount(() => {
 <template>
   <div ref="terminalElement" class="terminal-container"></div>
 </template>
-
-<style scoped>
-.terminal-container {
-  width: 100%;
-  height: 500px;
-  padding: 12px;
-  background-color: #0b1020;
-}
-</style>

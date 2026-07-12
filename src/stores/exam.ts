@@ -7,7 +7,7 @@ import type { Exercise } from '@/types/exercise'
 
 export const useExamStore = defineStore('exam', () => {
   const currentExerciseIndex = ref(0)
-  const completedExerciseIds = ref<number[]>([])
+  const submissions = ref<Record<number, TerminalState>>({})
 
   const startedAt = ref<number | null>(null)
   const finishedAt = ref<number | null>(null)
@@ -16,53 +16,73 @@ export const useExamStore = defineStore('exam', () => {
     return exercises[currentExerciseIndex.value]
   })
 
+  const results = computed(() => {
+    return exercises.map((exercise: Exercise) => {
+      const submission = submissions.value[exercise.id]
+      const passed = submission ? exercise.validate(submission) : false
+
+      return {
+        id: exercise.id,
+        title: exercise.title,
+        points: exercise.points,
+        earnedPoints: passed ? exercise.points : 0,
+        submitted: Boolean(submission),
+      }
+    })
+  })
+
   const score = computed(() => {
-    return exercises
-      .filter((exercise: Exercise) => completedExerciseIds.value.includes(exercise.id))
-      .reduce((total: number, exercise: Exercise) => total + exercise.points, 0)
+    return results.value.reduce((total, result) => total + result.earnedPoints, 0)
   })
 
   const maximumScore = computed(() => {
     return exercises.reduce((total: number, exercise: Exercise) => total + exercise.points, 0)
   })
 
+  const canGoToPreviousExercise = computed(() => currentExerciseIndex.value > 0)
+  const canGoToNextExercise = computed(() => currentExerciseIndex.value < exercises.length - 1)
+
   const isFinished = computed(() => {
-    return completedExerciseIds.value.length === exercises.length
+    return finishedAt.value !== null
   })
 
   function startExam(): void {
-    startedAt.value = Date.now()
+    if (startedAt.value === null) {
+      startedAt.value = Date.now()
+    }
   }
 
-  function evaluateCurrentExercise(terminalState: TerminalState): boolean {
+  function saveCurrentSubmission(terminalState: TerminalState): void {
     const exercise = currentExercise.value
 
     if (!exercise) {
-      return false
+      return
     }
 
-    const passed = exercise.validate(terminalState)
+    submissions.value[exercise.id] = terminalState
+  }
 
-    if (!passed) {
-      return false
+  function goToPreviousExercise(): void {
+    if (canGoToPreviousExercise.value) {
+      currentExerciseIndex.value -= 1
     }
+  }
 
-    if (!completedExerciseIds.value.includes(exercise.id)) {
-      completedExerciseIds.value.push(exercise.id)
+  function goToNextExercise(): void {
+    if (canGoToNextExercise.value) {
+      currentExerciseIndex.value += 1
     }
+  }
 
-    if (currentExerciseIndex.value < exercises.length - 1) {
-      currentExerciseIndex.value++
-    } else {
+  function completeExam(): void {
+    if (finishedAt.value === null) {
       finishedAt.value = Date.now()
     }
-
-    return true
   }
 
   function resetExam(): void {
     currentExerciseIndex.value = 0
-    completedExerciseIds.value = []
+    submissions.value = {}
     startedAt.value = null
     finishedAt.value = null
   }
@@ -71,14 +91,20 @@ export const useExamStore = defineStore('exam', () => {
     exercises,
     currentExerciseIndex,
     currentExercise,
-    completedExerciseIds,
+    submissions,
     startedAt,
     finishedAt,
+    results,
     score,
     maximumScore,
+    canGoToPreviousExercise,
+    canGoToNextExercise,
     isFinished,
     startExam,
-    evaluateCurrentExercise,
+    saveCurrentSubmission,
+    goToPreviousExercise,
+    goToNextExercise,
+    completeExam,
     resetExam,
   }
 })

@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import type { CommandResult, FileSystemNode, TerminalState } from '@/types/terminal'
 
 import { getBaseName, getParentPath, normalizePath } from '@/services/pathUtils'
+import { parseCommand } from '@/services/commandParser'
 
 function createInitialNodes(): Record<string, FileSystemNode> {
   return {
@@ -65,6 +66,23 @@ export const useTerminalStore = defineStore('terminal', () => {
       .sort()
   }
 
+  function writeFile(path: string, content: string, append: boolean = false): boolean {
+    const parentPath = getParentPath(path)
+
+    if (!isDirectory(parentPath)) {
+      return false
+    }
+
+    const previousContent = nodes.value[path]?.content ?? ''
+
+    nodes.value[path] = {
+      type: 'file',
+      content: append ? previousContent + content : content,
+    }
+
+    return true
+  }
+
   function execute(rawCommand: string): CommandResult {
     const commandLine = rawCommand.trim()
 
@@ -76,10 +94,10 @@ export const useTerminalStore = defineStore('terminal', () => {
 
     history.value.push(commandLine)
 
-    const parts = commandLine.split(/\s+/)
+    const parsed = parseCommand(commandLine)
 
-    const command = parts[0]
-    const args = parts.slice(1)
+    const command = parsed.command
+    const args = parsed.args
 
     switch (command) {
       case 'pwd':
@@ -102,6 +120,7 @@ export const useTerminalStore = defineStore('terminal', () => {
             ' cd [path]',
             ' mkdir <directory>',
             ' touch <file>',
+            ' cat <file>',
             ' echo <text>',
             ' clear',
             ' history',
@@ -134,7 +153,7 @@ export const useTerminalStore = defineStore('terminal', () => {
         const inputPath = args[0] ?? '/home/student'
 
         const expandedPath = inputPath.startsWith('~')
-          ? inputPath.replace('~', '/home/value')
+          ? inputPath.replace('~', '/home/student')
           : inputPath
 
         const targetPath = normalizePath(currentDirectory.value, expandedPath)
@@ -254,11 +273,27 @@ export const useTerminalStore = defineStore('terminal', () => {
         }
       }
 
-      // TODO: does not yet support '>' operator
-      case 'echo':
-        return {
-          output: [args.join(' ')],
+      case 'echo': {
+        const text = args.join(' ')
+
+        if (!parsed.redirect) {
+          return {
+            output: [text],
+          }
         }
+        const targetPath = normalizePath(currentDirectory.value, parsed.redirect.target)
+
+        const success = writeFile(targetPath, `${text}\n`, parsed.redirect.append)
+
+        if (!success) {
+          return {
+            output: [`bash: ${parsed.redirect.target}: No such file or directory`],
+          }
+        }
+        return {
+          output: [],
+        }
+      }
 
       case 'history':
         return {
@@ -279,11 +314,27 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   function getSnapshot(): TerminalState {
+    const snapshotNodes = Object.fromEntries(
+      Object.entries(nodes.value).map(([path, node]) => [
+        path,
+        {
+          type: node.type,
+          content: node.content,
+        },
+      ]),
+    )
+
     return {
       currentDirectory: currentDirectory.value,
-      nodes: structuredClone(nodes.value),
+      nodes: snapshotNodes,
       history: [...history.value],
     }
+  }
+
+  function reset(): void {
+    currentDirectory.value = '/home/student'
+    nodes.value = createInitialNodes()
+    history.value = []
   }
 
   return {
@@ -293,5 +344,6 @@ export const useTerminalStore = defineStore('terminal', () => {
     prompt,
     execute,
     getSnapshot,
+    reset,
   }
 })
